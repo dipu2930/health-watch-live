@@ -1,10 +1,29 @@
 import { motion } from "framer-motion";
-import { Shield, Bell, Search, User, Menu, Globe } from "lucide-react";
+import { Shield, Bell, Search, User, Menu, Globe, LogOut, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { useAlerts } from "@/hooks/useDashboardData";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export const Header = () => {
-  const [alertCount] = useState(7);
+  const { user, signOut } = useAuth();
+  const { data: alerts } = useAlerts();
+  const navigate = useNavigate();
+  
+  const alertCount = alerts?.length || 0;
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/auth");
+  };
 
   return (
     <motion.header
@@ -63,19 +82,49 @@ export const Header = () => {
             <Bell className="h-5 w-5" />
             {alertCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 h-5 w-5 rounded-full bg-destructive flex items-center justify-center text-[10px] font-bold text-destructive-foreground">
-                {alertCount}
+                {alertCount > 9 ? "9+" : alertCount}
               </span>
             )}
           </Button>
 
-          {/* User */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <User className="h-5 w-5" />
-          </Button>
+          {/* User Menu */}
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <User className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col">
+                    <span className="font-medium">Health Official</span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {user.email}
+                    </span>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => navigate("/auth")}
+            >
+              <LogIn className="h-5 w-5" />
+            </Button>
+          )}
 
           {/* Mobile Menu */}
           <Button

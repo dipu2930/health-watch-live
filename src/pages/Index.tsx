@@ -16,8 +16,16 @@ import { AlertsPanel } from "@/components/dashboard/AlertsPanel";
 import { NLPSurveillance } from "@/components/dashboard/NLPSurveillance";
 import { PredictionChart } from "@/components/dashboard/PredictionChart";
 import { StateDetail } from "@/components/dashboard/StateDetail";
+import { 
+  useDashboardStats, 
+  useAlerts, 
+  useNLPSignals, 
+  usePredictions,
+  useStateMapData 
+} from "@/hooks/useDashboardData";
+import { Skeleton } from "@/components/ui/skeleton";
 
-// Mock data
+// Fallback mock data for when database is empty
 const mockAlerts = [
   {
     id: "1",
@@ -42,22 +50,6 @@ const mockAlerts = [
     location: "Delhi NCR",
     time: "1 hour ago",
     description: "Water contamination suspected in multiple areas. Emergency protocols activated.",
-  },
-  {
-    id: "4",
-    type: "info" as const,
-    title: "Surveillance Update",
-    location: "Maharashtra",
-    time: "2 hours ago",
-    description: "NLP detected increased social media mentions of flu symptoms in Mumbai region.",
-  },
-  {
-    id: "5",
-    type: "warning" as const,
-    title: "Typhoid Alert",
-    location: "Bihar",
-    time: "3 hours ago",
-    description: "Cluster of typhoid cases identified in Patna district. Investigation ongoing.",
   },
 ];
 
@@ -92,36 +84,6 @@ const mockSignals = [
     relevance: 72,
     timestamp: "10 mins ago",
   },
-  {
-    id: "4",
-    source: "social" as const,
-    language: "Marathi",
-    content: "पुण्यात स्वाइन फ्लूचे रुग्ण आढळले, नागरिकांना सावध राहण्याचे आवाहन",
-    location: "Pune",
-    sentiment: "negative" as const,
-    relevance: 91,
-    timestamp: "15 mins ago",
-  },
-  {
-    id: "5",
-    source: "news" as const,
-    language: "English",
-    content: "Health ministry reports decline in COVID-19 cases across northern states",
-    location: "National",
-    sentiment: "positive" as const,
-    relevance: 68,
-    timestamp: "20 mins ago",
-  },
-  {
-    id: "6",
-    source: "radio" as const,
-    language: "Telugu",
-    content: "హైదరాబాద్‌లో జలుబు, దగ్గు కేసులు పెరుగుతున్నాయి",
-    location: "Hyderabad",
-    sentiment: "negative" as const,
-    relevance: 78,
-    timestamp: "25 mins ago",
-  },
 ];
 
 const mockPredictionData = [
@@ -137,110 +99,98 @@ const mockPredictionData = [
   { date: "Mar 5", actual: null, predicted: 420, lower: 355, upper: 485 },
 ];
 
-const stateDetails: Record<string, any> = {
-  UP: {
-    id: "UP",
-    name: "Uttar Pradesh",
-    riskLevel: "critical",
-    cases: 5234,
-    population: 235000000,
-    rainfall: 850,
-    temperature: 28,
-    healthFacilities: 4523,
-    diseases: [
-      { name: "Dengue", cases: 2341, trend: "up" },
-      { name: "Malaria", cases: 1456, trend: "up" },
-      { name: "Typhoid", cases: 892, trend: "stable" },
-      { name: "Cholera", cases: 545, trend: "down" },
-    ],
-  },
-  DL: {
-    id: "DL",
-    name: "Delhi",
-    riskLevel: "critical",
-    cases: 6789,
-    population: 32000000,
-    rainfall: 620,
-    temperature: 30,
-    healthFacilities: 892,
-    diseases: [
-      { name: "Dengue", cases: 3456, trend: "up" },
-      { name: "COVID-19", cases: 1890, trend: "down" },
-      { name: "Typhoid", cases: 789, trend: "up" },
-      { name: "Chikungunya", cases: 654, trend: "stable" },
-    ],
-  },
-  MH: {
-    id: "MH",
-    name: "Maharashtra",
-    riskLevel: "high",
-    cases: 3892,
-    population: 125000000,
-    rainfall: 1100,
-    temperature: 27,
-    healthFacilities: 3891,
-    diseases: [
-      { name: "Leptospirosis", cases: 1234, trend: "up" },
-      { name: "Dengue", cases: 1089, trend: "stable" },
-      { name: "Malaria", cases: 876, trend: "down" },
-      { name: "H1N1", cases: 693, trend: "up" },
-    ],
-  },
-  WB: {
-    id: "WB",
-    name: "West Bengal",
-    riskLevel: "critical",
-    cases: 4567,
-    population: 100000000,
-    rainfall: 1500,
-    temperature: 29,
-    healthFacilities: 2456,
-    diseases: [
-      { name: "Malaria", cases: 2134, trend: "up" },
-      { name: "Dengue", cases: 1456, trend: "up" },
-      { name: "Japanese Encephalitis", cases: 567, trend: "stable" },
-      { name: "Kala-azar", cases: 410, trend: "down" },
-    ],
-  },
-  RJ: {
-    id: "RJ",
-    name: "Rajasthan",
-    riskLevel: "high",
-    cases: 2847,
-    population: 81000000,
-    rainfall: 400,
-    temperature: 34,
-    healthFacilities: 2134,
-    diseases: [
-      { name: "Dengue", cases: 1234, trend: "up" },
-      { name: "Chikungunya", cases: 876, trend: "stable" },
-      { name: "Typhoid", cases: 456, trend: "down" },
-      { name: "Heat Stroke", cases: 281, trend: "up" },
-    ],
-  },
+// Transform database alerts to component format
+const transformAlerts = (dbAlerts: any[] | undefined) => {
+  if (!dbAlerts || dbAlerts.length === 0) return mockAlerts;
+  
+  return dbAlerts.map((alert) => ({
+    id: alert.id,
+    type: (alert.type === "critical" ? "critical" : alert.type === "warning" ? "warning" : "info") as "critical" | "warning" | "info",
+    title: alert.title,
+    location: alert.states?.name || "Unknown",
+    time: formatTimeAgo(new Date(alert.created_at)),
+    description: alert.description || "",
+  }));
 };
 
-// Default state details for states not explicitly defined
-const getStateDetails = (stateId: string) => {
-  if (stateDetails[stateId]) return stateDetails[stateId];
+// Transform database NLP signals to component format
+const transformSignals = (dbSignals: any[] | undefined) => {
+  if (!dbSignals || dbSignals.length === 0) return mockSignals;
   
+  return dbSignals.map((signal) => ({
+    id: signal.id,
+    source: (signal.source === "news" ? "news" : signal.source === "social" ? "social" : "radio") as "news" | "social" | "radio",
+    language: signal.language,
+    content: signal.content,
+    location: signal.location_detected || signal.states?.name || "Unknown",
+    sentiment: (signal.sentiment === "positive" ? "positive" : signal.sentiment === "negative" ? "negative" : "neutral") as "positive" | "negative" | "neutral",
+    relevance: signal.relevance_score || 50,
+    timestamp: formatTimeAgo(new Date(signal.detected_at)),
+  }));
+};
+
+// Transform predictions to chart format
+const transformPredictions = (dbPredictions: any[] | undefined) => {
+  if (!dbPredictions || dbPredictions.length === 0) return mockPredictionData;
+  
+  return dbPredictions.map((pred) => ({
+    date: new Date(pred.prediction_date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    actual: null, // We'd need outbreak reports to get actual values
+    predicted: pred.predicted_cases,
+    lower: pred.confidence_lower,
+    upper: pred.confidence_upper,
+  }));
+};
+
+const formatTimeAgo = (date: Date) => {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} mins ago`;
+  
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+  
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+};
+
+const formatPopulation = (pop: number) => {
+  if (pop >= 1000000000) return `${(pop / 1000000000).toFixed(1)}B`;
+  if (pop >= 1000000) return `${(pop / 1000000).toFixed(0)}M`;
+  if (pop >= 1000) return `${(pop / 1000).toFixed(0)}K`;
+  return pop.toString();
+};
+
+// Get state details from map data
+const getStateDetails = (stateId: string, stateMapData: any[] | undefined) => {
   const stateData = statesPaths.find(s => s.id === stateId);
+  const dbState = stateMapData?.find(s => s.id === stateId);
+  
   if (!stateData) return null;
+  
+  const trends = ["up", "down", "stable"] as const;
+  const getRandomTrend = () => trends[Math.floor(Math.random() * 3)];
+  
+  const riskLevel = (dbState?.riskLevel || stateData.riskLevel) as "critical" | "high" | "medium" | "low";
+  const cases = dbState?.cases || stateData.cases;
   
   return {
     id: stateId,
     name: stateData.name,
-    riskLevel: stateData.riskLevel,
-    cases: stateData.cases,
-    population: Math.floor(Math.random() * 50000000) + 10000000,
+    riskLevel,
+    cases,
+    population: Number(dbState?.population) || Math.floor(Math.random() * 50000000) + 10000000,
     rainfall: Math.floor(Math.random() * 1500) + 300,
     temperature: Math.floor(Math.random() * 15) + 20,
-    healthFacilities: Math.floor(Math.random() * 3000) + 500,
+    healthFacilities: dbState?.healthFacilities || Math.floor(Math.random() * 3000) + 500,
     diseases: [
-      { name: "Dengue", cases: Math.floor(stateData.cases * 0.4), trend: ["up", "down", "stable"][Math.floor(Math.random() * 3)] },
-      { name: "Malaria", cases: Math.floor(stateData.cases * 0.3), trend: ["up", "down", "stable"][Math.floor(Math.random() * 3)] },
-      { name: "Typhoid", cases: Math.floor(stateData.cases * 0.2), trend: ["up", "down", "stable"][Math.floor(Math.random() * 3)] },
-      { name: "Others", cases: Math.floor(stateData.cases * 0.1), trend: "stable" },
+      { name: "Dengue", cases: Math.floor(cases * 0.4), trend: getRandomTrend() },
+      { name: "Malaria", cases: Math.floor(cases * 0.3), trend: getRandomTrend() },
+      { name: "Typhoid", cases: Math.floor(cases * 0.2), trend: getRandomTrend() },
+      { name: "Others", cases: Math.floor(cases * 0.1), trend: "stable" as const },
     ],
   };
 };
@@ -248,6 +198,13 @@ const getStateDetails = (stateId: string) => {
 const Index = () => {
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  
+  // Fetch data from database
+  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+  const { data: dbAlerts } = useAlerts();
+  const { data: dbSignals } = useNLPSignals();
+  const { data: dbPredictions } = usePredictions();
+  const { data: stateMapData } = useStateMapData();
 
   const handleExplore = () => {
     dashboardRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -257,7 +214,12 @@ const Index = () => {
     setSelectedState(stateId === selectedState ? null : stateId);
   };
 
-  const selectedStateDetails = selectedState ? getStateDetails(selectedState) : null;
+  const selectedStateDetails = selectedState ? getStateDetails(selectedState, stateMapData) : null;
+  
+  // Transform data for components
+  const alerts = transformAlerts(dbAlerts);
+  const signals = transformSignals(dbSignals);
+  const predictions = transformPredictions(dbPredictions);
 
   return (
     <div className="min-h-screen bg-background">
@@ -285,42 +247,53 @@ const Index = () => {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <StatsCard
-              title="Total Active Cases"
-              value={45678}
-              change="+12.5% from last week"
-              changeType="negative"
-              icon={Bug}
-              variant="danger"
-              delay={0}
-            />
-            <StatsCard
-              title="States on Alert"
-              value={8}
-              change="2 new alerts today"
-              changeType="negative"
-              icon={AlertTriangle}
-              variant="warning"
-              delay={0.1}
-            />
-            <StatsCard
-              title="Population Covered"
-              value="1.4B"
-              change="28 states monitored"
-              changeType="neutral"
-              icon={Users}
-              variant="default"
-              delay={0.2}
-            />
-            <StatsCard
-              title="Prediction Accuracy"
-              value="94.2%"
-              change="+2.1% improvement"
-              changeType="positive"
-              icon={TrendingUp}
-              variant="success"
-              delay={0.3}
-            />
+            {statsLoading ? (
+              <>
+                <Skeleton className="h-32 rounded-xl" />
+                <Skeleton className="h-32 rounded-xl" />
+                <Skeleton className="h-32 rounded-xl" />
+                <Skeleton className="h-32 rounded-xl" />
+              </>
+            ) : (
+              <>
+                <StatsCard
+                  title="Total Active Cases"
+                  value={stats?.totalCases || 0}
+                  change="From active outbreak reports"
+                  changeType="neutral"
+                  icon={Bug}
+                  variant={stats?.totalCases && stats.totalCases > 1000 ? "danger" : "default"}
+                  delay={0}
+                />
+                <StatsCard
+                  title="Active Alerts"
+                  value={stats?.alertsCount || 0}
+                  change="Requiring attention"
+                  changeType={stats?.alertsCount && stats.alertsCount > 5 ? "negative" : "neutral"}
+                  icon={AlertTriangle}
+                  variant={stats?.alertsCount && stats.alertsCount > 5 ? "warning" : "default"}
+                  delay={0.1}
+                />
+                <StatsCard
+                  title="Population Covered"
+                  value={formatPopulation(stats?.totalPopulation || 0)}
+                  change={`${stats?.statesMonitored || 0} states monitored`}
+                  changeType="neutral"
+                  icon={Users}
+                  variant="default"
+                  delay={0.2}
+                />
+                <StatsCard
+                  title="Prediction Accuracy"
+                  value="94.2%"
+                  change="+2.1% improvement"
+                  changeType="positive"
+                  icon={TrendingUp}
+                  variant="success"
+                  delay={0.3}
+                />
+              </>
+            )}
           </div>
 
           {/* Main Dashboard Grid */}
@@ -383,16 +356,16 @@ const Index = () => {
             {/* Middle Column - Charts */}
             <div className="lg:col-span-4 space-y-6">
               <PredictionChart
-                data={mockPredictionData as any}
+                data={predictions as any}
                 disease="Dengue"
                 state={selectedState ? statesPaths.find(s => s.id === selectedState)?.name || "India" : "India"}
               />
-              <NLPSurveillance signals={mockSignals} />
+              <NLPSurveillance signals={signals} />
             </div>
 
             {/* Right Column - Alerts */}
             <div className="lg:col-span-3">
-              <AlertsPanel alerts={mockAlerts} />
+              <AlertsPanel alerts={alerts} />
             </div>
           </div>
         </div>
