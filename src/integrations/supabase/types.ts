@@ -574,6 +574,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      user_in_state_jurisdiction: {
+        Args: { _state_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "officer"
