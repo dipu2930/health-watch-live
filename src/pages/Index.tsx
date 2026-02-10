@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Activity,
@@ -24,6 +24,7 @@ import {
   useStateMapData 
 } from "@/hooks/useDashboardData";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRealtimeDashboard } from "@/hooks/useRealtimeDashboard";
 
 // Fallback mock data for when database is empty
 const mockAlerts = [
@@ -198,6 +199,9 @@ const getStateDetails = (stateId: string, stateMapData: any[] | undefined) => {
 const Index = () => {
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  
+  // Subscribe to real-time updates
+  useRealtimeDashboard();
   
   // Fetch data from database
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
