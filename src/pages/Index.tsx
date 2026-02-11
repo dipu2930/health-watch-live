@@ -21,7 +21,9 @@ import {
   useAlerts, 
   useNLPSignals, 
   usePredictions,
-  useStateMapData 
+  useStateMapData,
+  useWeatherData,
+  useOutbreaksByStateDisease,
 } from "@/hooks/useDashboardData";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRealtimeDashboard } from "@/hooks/useRealtimeDashboard";
@@ -165,34 +167,56 @@ const formatPopulation = (pop: number) => {
   return pop.toString();
 };
 
-// Get state details from map data
-const getStateDetails = (stateId: string, stateMapData: any[] | undefined) => {
+// Get state details from map data, weather, and outbreak breakdown
+const getStateDetails = (
+  stateId: string, 
+  stateMapData: any[] | undefined, 
+  weatherData: any[] | undefined,
+  outbreakData: any[] | undefined
+) => {
   const stateData = statesPaths.find(s => s.id === stateId);
   const dbState = stateMapData?.find(s => s.id === stateId);
   
   if (!stateData) return null;
   
-  const trends = ["up", "down", "stable"] as const;
-  const getRandomTrend = () => trends[Math.floor(Math.random() * 3)];
-  
   const riskLevel = (dbState?.riskLevel || stateData.riskLevel) as "critical" | "high" | "medium" | "low";
   const cases = dbState?.cases || stateData.cases;
+  
+  // Get real weather data for this state
+  const stateWeather = weatherData?.find(w => w.states?.code === stateId);
+  
+  // Get real disease breakdown for this state
+  const stateUuid = dbState?.stateUuid;
+  const diseaseMap: Record<string, number> = {};
+  outbreakData?.forEach((o: any) => {
+    if (o.state_id === stateUuid && o.diseases?.name) {
+      diseaseMap[o.diseases.name] = (diseaseMap[o.diseases.name] || 0) + (o.case_count || 0);
+    }
+  });
+  
+  const diseases = Object.entries(diseaseMap)
+    .sort(([, a], [, b]) => b - a)
+    .map(([name, diseaseCases]) => ({
+      name,
+      cases: diseaseCases,
+      trend: (diseaseCases > cases * 0.3 ? "up" : diseaseCases > cases * 0.1 ? "stable" : "down") as "up" | "down" | "stable",
+    }));
+  
+  // If no outbreak data for this state, show "No active outbreaks"
+  if (diseases.length === 0) {
+    diseases.push({ name: "No active outbreaks", cases: 0, trend: "stable" as const });
+  }
   
   return {
     id: stateId,
     name: stateData.name,
     riskLevel,
     cases,
-    population: Number(dbState?.population) || Math.floor(Math.random() * 50000000) + 10000000,
-    rainfall: Math.floor(Math.random() * 1500) + 300,
-    temperature: Math.floor(Math.random() * 15) + 20,
-    healthFacilities: dbState?.healthFacilities || Math.floor(Math.random() * 3000) + 500,
-    diseases: [
-      { name: "Dengue", cases: Math.floor(cases * 0.4), trend: getRandomTrend() },
-      { name: "Malaria", cases: Math.floor(cases * 0.3), trend: getRandomTrend() },
-      { name: "Typhoid", cases: Math.floor(cases * 0.2), trend: getRandomTrend() },
-      { name: "Others", cases: Math.floor(cases * 0.1), trend: "stable" as const },
-    ],
+    population: Number(dbState?.population) || 0,
+    rainfall: stateWeather ? Number(stateWeather.rainfall_mm) : 0,
+    temperature: stateWeather ? Number(stateWeather.temperature_avg) : 0,
+    healthFacilities: dbState?.healthFacilities || 0,
+    diseases,
   };
 };
 
@@ -209,6 +233,8 @@ const Index = () => {
   const { data: dbSignals } = useNLPSignals();
   const { data: dbPredictions } = usePredictions();
   const { data: stateMapData } = useStateMapData();
+  const { data: weatherData } = useWeatherData();
+  const { data: outbreakData } = useOutbreaksByStateDisease();
 
   const handleExplore = () => {
     dashboardRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -218,7 +244,7 @@ const Index = () => {
     setSelectedState(stateId === selectedState ? null : stateId);
   };
 
-  const selectedStateDetails = selectedState ? getStateDetails(selectedState, stateMapData) : null;
+  const selectedStateDetails = selectedState ? getStateDetails(selectedState, stateMapData, weatherData, outbreakData) : null;
   
   // Transform data for components
   const alerts = transformAlerts(dbAlerts);

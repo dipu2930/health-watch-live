@@ -161,6 +161,44 @@ export const useDashboardStats = () => {
   });
 };
 
+// Fetch weather data for states
+export const useWeatherData = () => {
+  return useQuery({
+    queryKey: ["weather_data"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("weather_data")
+        .select(`
+          *,
+          states:state_id(name, code)
+        `)
+        .order("record_date", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+};
+
+// Fetch outbreak breakdown by state and disease
+export const useOutbreaksByStateDisease = () => {
+  return useQuery({
+    queryKey: ["outbreaks_by_state_disease"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("outbreak_reports")
+        .select(`
+          state_id,
+          case_count,
+          severity,
+          diseases:disease_id(name)
+        `)
+        .eq("status", "active");
+      if (error) throw error;
+      return data;
+    },
+  });
+};
+
 // Helper to get state-specific data for the map
 export const useStateMapData = () => {
   return useQuery({
@@ -187,7 +225,6 @@ export const useStateMapData = () => {
             stateCases[outbreak.state_id] = { cases: 0, severity: "low" };
           }
           stateCases[outbreak.state_id].cases += outbreak.case_count || 0;
-          // Use highest severity
           if (outbreak.severity === "critical" || stateCases[outbreak.state_id].severity === "critical") {
             stateCases[outbreak.state_id].severity = "critical";
           } else if (outbreak.severity === "high" || stateCases[outbreak.state_id].severity === "high") {
